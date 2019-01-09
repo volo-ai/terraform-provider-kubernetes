@@ -30,7 +30,7 @@ func TestAccKubernetesDataSourceSecret_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("kubernetes_secret.test", "metadata.0.resource_version"),
 					resource.TestCheckResourceAttrSet("kubernetes_secret.test", "metadata.0.self_link"),
 					resource.TestCheckResourceAttrSet("kubernetes_secret.test", "metadata.0.uid"),
-					resource.TestCheckResourceAttr("kubernetes_secret.test", "data.%", "0"),
+					resource.TestCheckResourceAttr("kubernetes_secret.test", "data.%", "2"),
 					resource.TestCheckResourceAttr("kubernetes_secret.test", "type", "Opaque"),
 				),
 			},
