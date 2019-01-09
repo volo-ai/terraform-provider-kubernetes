@@ -1,102 +1,66 @@
 module github.com/sl1pm4t/terraform-provider-kubernetes
 
 require (
-	cloud.google.com/go v0.0.0-20171113024717-b42e7d1aac8a
-	github.com/Azure/go-autorest v8.0.0+incompatible
-	github.com/PuerkitoBio/purell v1.1.0
-	github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2
-	github.com/agext/levenshtein v1.2.1
-	github.com/apparentlymart/go-cidr v0.0.0-20170418151526-7e4b007599d4
-	github.com/apparentlymart/go-rundeck-api v0.0.0-20160826143032-f6af74d34d1e
-	github.com/apparentlymart/go-textseg v0.0.0-20170531203952-b836f5c4d331
-	github.com/armon/go-radix v0.0.0-20170727155443-1fca145dffbc
-	github.com/aws/aws-sdk-go v1.12.75
-	github.com/beevik/etree v0.0.0-20171015221209-af219c0c7ea1
-	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d
-	github.com/bgentry/speakeasy v0.1.0
-	github.com/blang/semver v3.5.1+incompatible
-	github.com/davecgh/go-spew v1.1.0
-	github.com/dgrijalva/jwt-go v3.1.0+incompatible
-	github.com/docker/distribution v0.0.0-20170221190814-50133d63723f
-	github.com/emicklei/go-restful v0.0.0-20170216140332-cf834cf8da5b
-	github.com/emicklei/go-restful-swagger12 v0.0.0-20170208215640-dcef7f557305
-	github.com/fsouza/go-dockerclient v0.0.0-20160427172547-1d4f4ae73768
-	github.com/ghodss/yaml v0.0.0-20161207003320-04f313413ffd
-	github.com/go-ini/ini v1.23.1
-	github.com/go-openapi/analysis v0.0.0-20160815203709-b44dc874b601
-	github.com/go-openapi/jsonpointer v0.0.0-20160704185906-46af16f9f7b1
-	github.com/go-openapi/jsonreference v0.0.0-20160704190145-13c6e3589ad9
-	github.com/go-openapi/loads v0.0.0-20160704185440-18441dfa706d
-	github.com/go-openapi/spec v0.0.0-20160808142527-6aced65f8501
-	github.com/go-openapi/swag v0.0.0-20160704191624-1d0bd113de87
-	github.com/gogo/protobuf v0.0.0-20170220125546-3ea128ab6901
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/protobuf v0.0.0-20170601230230-5a0f697c9ed9
-	github.com/golang/snappy v0.0.0-20170215233205-553a64147049
-	github.com/google/btree v0.0.0-20180124185431-e89373fe6b4a
-	github.com/google/gofuzz v0.0.0-20161122191042-44d81051d367
-	github.com/googleapis/gax-go v0.0.0-20170609041554-e6c452d1a33f
-	github.com/googleapis/gnostic v0.0.0-20180202000817-3b40d6509f37
-	github.com/gophercloud/gophercloud v0.0.0-20180210024343-6da026c32e2d
-	github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7
-	github.com/hashicorp/errwrap v0.0.0-20141028054710-7554cd9344ce
-	github.com/hashicorp/go-cleanhttp v0.0.0-20170211013415-3573b8b52aa7
-	github.com/hashicorp/go-getter v0.0.0-20170922192948-a686900cb375
-	github.com/hashicorp/go-hclog v0.0.0-20170830144852-b39b96628f4f
-	github.com/hashicorp/go-multierror v0.0.0-20150916205742-d30f09973e19
-	github.com/hashicorp/go-plugin v0.0.0-20170816151819-a5174f84d7f8
-	github.com/hashicorp/go-uuid v0.0.0-20160120003506-36289988d83c
-	github.com/hashicorp/go-version v0.0.0-20161031182605-e96d38404026
-	github.com/hashicorp/hcl v0.0.0-20170504190234-a4b07c25de5f
-	github.com/hashicorp/hcl2 v0.0.0-20180226163856-4719b76b5235
-	github.com/hashicorp/hil v0.0.0-20170512213305-fac2259da677
-	github.com/hashicorp/logutils v0.0.0-20150609070431-0dc08b1671f3
-	github.com/hashicorp/terraform v0.11.4
-	github.com/hashicorp/vault v0.0.0-20171112173456-74d9a382c895
-	github.com/hashicorp/yamux v0.0.0-20160720233140-d1caa6c97c9f
-	github.com/howeyc/gopass v0.0.0-20170109162249-bf9dde6d0d2c
-	github.com/imdario/mergo v0.0.0-20160517064435-50d4dbd4eb0e
-	github.com/jen20/awspolicyequivalence v0.0.0-20170831201602-3d48364a137a
-	github.com/jmespath/go-jmespath v0.0.0-20160803190731-bd40a432e4c7
-	github.com/json-iterator/go v0.0.0-20180205154542-002b5ae34214
-	github.com/juju/ratelimit v0.0.0-20170523012141-5b9ff8664717
-	github.com/keybase/go-crypto v0.0.0-20171010110049-f63716704117
-	github.com/mailru/easyjson v0.0.0-20170219113354-d89c33ca38a1
-	github.com/mattn/go-isatty v0.0.2
-	github.com/mitchellh/cli v0.0.0-20170824190209-0ce7cd515f64
-	github.com/mitchellh/copystructure v0.0.0-20161013195342-5af94aef99f5
-	github.com/mitchellh/go-homedir v0.0.0-20161203194507-b8bc1bf76747
-	github.com/mitchellh/go-testing-interface v0.0.0-20170730050907-9a441910b168
-	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7
-	github.com/mitchellh/hashstructure v0.0.0-20160209213820-6b17d669fac5
-	github.com/mitchellh/mapstructure v0.0.0-20170307201123-53818660ed49
-	github.com/mitchellh/reflectwalk v0.0.0-20161003174516-92573fe8d000
-	github.com/opencontainers/go-digest v1.0.0-rc0
-	github.com/peterbourgon/diskv v0.0.0-20180312054125-0646ccaebea1
-	github.com/posener/complete v0.0.0-20170829171112-9f41f7636a72
-	github.com/rancher/go-rancher v0.0.0-20170407040943-ec24b7f12fca
-	github.com/satori/go.uuid v0.0.0-20160927100844-b061729afc07
-	github.com/spf13/pflag v0.0.0-20170130214245-9ff6c6923cff
-	github.com/terraform-providers/terraform-provider-aws v1.10.0
-	github.com/terraform-providers/terraform-provider-google v1.2.0
-	github.com/ugorji/go v0.0.0-20160928015244-faddd6128c66
-	github.com/ulikunitz/xz v0.5.4
-	github.com/zclconf/go-cty v0.0.0-20180226025535-26c3df5df72f
-	golang.org/x/crypto v0.0.0-20170808112155-b176d7def5d7
-	golang.org/x/net v0.0.0-20171004034648-a04bdaca5b32
-	golang.org/x/oauth2 v0.0.0-20170807180024-9a379c6b3e95
-	golang.org/x/sys v0.0.0-20161214190518-d75a52659825
-	golang.org/x/text v0.0.0-20180223193632-27420a1a391f
-	golang.org/x/time v0.0.0-20170927054726-6dc17368e09b
-	google.golang.org/api v0.0.0-20171110222743-a0c31fb0028e
-	google.golang.org/appengine v0.0.0-20150527042145-b667a5000b08
-	google.golang.org/genproto v0.0.0-20171103030625-11c7f9e547da
-	google.golang.org/grpc v0.0.0-20171109215322-de2209a968d4
-	gopkg.in/inf.v0 v0.9.0
-	gopkg.in/yaml.v2 v2.0.0-20170407172122-cd8b52f8269e
-	k8s.io/api v0.0.0-20171214033149-af4bc157c3a2
-	k8s.io/apimachinery v0.0.0-20171207040834-180eddb345a5
-	k8s.io/client-go v6.0.0+incompatible
-	k8s.io/kube-openapi v0.0.0-20180425162723-3a0c53868c94
-	k8s.io/kubernetes v1.9.0
+	cloud.google.com/go v0.34.0 // indirect
+	contrib.go.opencensus.io/exporter/ocagent v0.4.1 // indirect
+	github.com/Azure/go-autorest v11.2.8+incompatible // indirect
+	github.com/apparentlymart/go-cidr v1.0.0 // indirect
+	github.com/aws/aws-sdk-go v1.16.12 // indirect
+	github.com/beevik/etree v1.0.1 // indirect
+	github.com/blang/semver v3.5.1+incompatible // indirect
+	github.com/boombuler/barcode v1.0.0 // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
+	github.com/dustinkirkland/golang-petname v0.0.0-20170921220637-d3c2ba80e75e // indirect
+	github.com/gogo/protobuf v1.2.0 // indirect
+	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
+	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c // indirect
+	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf // indirect
+	github.com/googleapis/gax-go v2.0.2+incompatible // indirect
+	github.com/googleapis/gnostic v0.2.0
+	github.com/gophercloud/gophercloud v0.0.0-20190103051213-cebde53d290e // indirect
+	github.com/gregjones/httpcache v0.0.0-20181110185634-c63ab54fda8f
+	github.com/hashicorp/go-getter v0.0.0-20181213035916-be39683deade // indirect
+	github.com/hashicorp/go-hclog v0.0.0-20181001195459-61d530d6c27f // indirect
+	github.com/hashicorp/go-plugin v0.0.0-20181212150838-f444068e8f5a // indirect
+	github.com/hashicorp/go-uuid v1.0.0 // indirect
+	github.com/hashicorp/go-version v1.0.0
+	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/hashicorp/hcl2 v0.0.0-20181220012050-6631d7cd0a68 // indirect
+	github.com/hashicorp/hil v0.0.0-20170627220502-fa9f258a9250 // indirect
+	github.com/hashicorp/logutils v1.0.0 // indirect
+	github.com/hashicorp/terraform v0.11.11
+	github.com/hashicorp/vault v1.0.1 // indirect
+	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/jen20/awspolicyequivalence v1.0.0 // indirect
+	github.com/json-iterator/go v1.1.5 // indirect
+	github.com/keybase/go-crypto v0.0.0-20181127160227-255a5089e85a // indirect
+	github.com/mitchellh/cli v1.0.0 // indirect
+	github.com/mitchellh/copystructure v1.0.0
+	github.com/mitchellh/go-homedir v1.0.0
+	github.com/mitchellh/hashstructure v1.0.0 // indirect
+	github.com/mitchellh/mapstructure v1.1.2 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/peterbourgon/diskv v2.0.1+incompatible
+	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
+	github.com/pquerna/otp v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.3 // indirect
+	github.com/stoewer/go-strcase v1.0.2 // indirect
+	github.com/terraform-providers/terraform-provider-aws v1.54.0
+	github.com/terraform-providers/terraform-provider-google v1.20.0
+	github.com/terraform-providers/terraform-provider-random v2.0.0+incompatible // indirect
+	github.com/terraform-providers/terraform-provider-template v1.0.0 // indirect
+	github.com/terraform-providers/terraform-provider-tls v1.2.0 // indirect
+	github.com/zclconf/go-cty v0.0.0-20181231001355-67e3da15e430 // indirect
+	golang.org/x/crypto v0.0.0-20190102171810-8d7daa0c54b3 // indirect
+	golang.org/x/net v0.0.0-20181220203305-927f97764cc3 // indirect
+	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c // indirect
+	google.golang.org/api v0.1.0 // indirect
+	gopkg.in/inf.v0 v0.9.1 // indirect
+	k8s.io/api v0.0.0-20181221193117-173ce66c1e39
+	k8s.io/apimachinery v0.0.0-20181227073029-9c4c36654334
+	k8s.io/client-go v10.0.0+incompatible
+	k8s.io/klog v0.1.0 // indirect
+	k8s.io/kubernetes v1.13.1
+	sigs.k8s.io/yaml v1.1.0 // indirect
 )
