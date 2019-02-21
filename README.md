@@ -1,18 +1,23 @@
 # Kubernetes Terraform Provider
 
 This provider is a fork of the official Kubernetes provider developed by HashiCorp.
-This fork supports the following resources in addition to the official provider:
 
-- Cluster Role `kubernetes_cluster_role`
-- Cluster Role Binding `kubernetes_cluster_role_binding`
+**Status**
+
+Maintenance of this fork will be winding down now that the official Terraform provider is being supported by a full time HashiCorp engineer :tada: :tada: :tada:
+
+In the meantime, this fork supports the following Kubernetes Resources currently not supported in the official provider:
+
+- ~Cluster Role~ **Added to official provider v1.5.1**
+- ~Cluster Role Binding~ **Added to official provider v1.3.0**
 - Cron Job `kubernetes_cron_job`
-- Daemonset `kubernetes_daemonset`
-- Deployment `kubernetes_deployment`
+- ~Daemonset~ **Added to official provider v1.5.1**
+- ~Deployment~ **Added to official provider v1.3.0**
 - Ingress `kubernetes_ingress`
 - Job `kubernetes_job`
-- Role `kubernetes_role`
-- Role Binding `kubernetes_role_binding`
-- Stateful Set `kubernetes_stateful_set`
+- ~Role~ **Added to official provider v1.5.0**
+- ~Role Binding~ **Added to official provider v1.5.0**
+- ~Stateful Set~ **Added to official provider v1.4.0**
 
 ## Supported Kubernetes Versions
 
