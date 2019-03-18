@@ -7,9 +7,9 @@ import (
 	"github.com/hashicorp/terraform/helper/acctest"
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/terraform"
+	api "k8s.io/api/autoscaling/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	api "k8s.io/kubernetes/pkg/apis/autoscaling/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func TestAccKubernetesHorizontalPodAutoscaler_basic(t *testing.T) {
@@ -205,24 +205,28 @@ func testAccCheckKubernetesHorizontalPodAutoscalerExists(n string, obj *api.Hori
 func testAccKubernetesHorizontalPodAutoscalerConfig_basic(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_horizontal_pod_autoscaler" "test" {
-	metadata {
-		annotations {
-			TestAnnotationOne = "one"
-		}
-		labels {
-			TestLabelOne = "one"
-			TestLabelThree = "three"
-			TestLabelFour = "four"
-		}
-		name = "%s"
-	}
-	spec {
-		max_replicas = 10
-		scale_target_ref {
-			kind = "ReplicationController"
-			name = "TerraformAccTest"
-		}
-	}
+  metadata {
+    annotations {
+      TestAnnotationOne = "one"
+    }
+
+    labels {
+      TestLabelOne   = "one"
+      TestLabelThree = "three"
+      TestLabelFour  = "four"
+    }
+
+    name = "%s"
+  }
+
+  spec {
+    max_replicas = 10
+
+    scale_target_ref {
+      kind = "ReplicationController"
+      name = "TerraformAccTest"
+    }
+  }
 }
 `, name)
 }
@@ -230,25 +234,29 @@ resource "kubernetes_horizontal_pod_autoscaler" "test" {
 func testAccKubernetesHorizontalPodAutoscalerConfig_metaModified(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_horizontal_pod_autoscaler" "test" {
-	metadata {
-		annotations {
-			TestAnnotationOne = "one"
-			TestAnnotationTwo = "two"
-		}
-		labels {
-			TestLabelOne = "one"
-			TestLabelTwo = "two"
-			TestLabelThree = "three"
-		}
-		name = "%s"
-	}
-	spec {
-		max_replicas = 10
-		scale_target_ref {
-			kind = "ReplicationController"
-			name = "TerraformAccTest"
-		}
-	}
+  metadata {
+    annotations {
+      TestAnnotationOne = "one"
+      TestAnnotationTwo = "two"
+    }
+
+    labels {
+      TestLabelOne   = "one"
+      TestLabelTwo   = "two"
+      TestLabelThree = "three"
+    }
+
+    name = "%s"
+  }
+
+  spec {
+    max_replicas = 10
+
+    scale_target_ref {
+      kind = "ReplicationController"
+      name = "TerraformAccTest"
+    }
+  }
 }
 `, name)
 }
@@ -256,16 +264,18 @@ resource "kubernetes_horizontal_pod_autoscaler" "test" {
 func testAccKubernetesHorizontalPodAutoscalerConfig_specModified(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_horizontal_pod_autoscaler" "test" {
-	metadata {
-		name = "%s"
-	}
-	spec {
-		max_replicas = 8
-		scale_target_ref {
-			kind = "ReplicationController"
-			name = "TerraformAccTestModified"
-		}
-	}
+  metadata {
+    name = "%s"
+  }
+
+  spec {
+    max_replicas = 8
+
+    scale_target_ref {
+      kind = "ReplicationController"
+      name = "TerraformAccTestModified"
+    }
+  }
 }
 `, name)
 }
@@ -273,16 +283,18 @@ resource "kubernetes_horizontal_pod_autoscaler" "test" {
 func testAccKubernetesHorizontalPodAutoscalerConfig_generatedName(prefix string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_horizontal_pod_autoscaler" "test" {
-	metadata {
-		generate_name = "%s"
-	}
-	spec {
-		max_replicas = 1
-		scale_target_ref {
-			kind = "ReplicationController"
-			name = "TerraformAccTestGeneratedName"
-		}
-	}
+  metadata {
+    generate_name = "%s"
+  }
+
+  spec {
+    max_replicas = 1
+
+    scale_target_ref {
+      kind = "ReplicationController"
+      name = "TerraformAccTestGeneratedName"
+    }
+  }
 }
 `, prefix)
 }

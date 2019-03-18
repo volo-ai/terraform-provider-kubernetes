@@ -1,38 +1,14 @@
 package kubernetes
 
 import (
+	"errors"
+
 	"github.com/hashicorp/terraform/helper/schema"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // Flatteners
-
-func flattenLabelSelector(in *metav1.LabelSelector) []interface{} {
-	att := make(map[string]interface{})
-	if len(in.MatchLabels) > 0 {
-		att["match_labels"] = in.MatchLabels
-	}
-	if len(in.MatchExpressions) > 0 {
-		att["match_expressions"] = flattenLabelSelectorRequirement(in.MatchExpressions)
-	}
-	if len(att) > 0 {
-		return []interface{}{att}
-	}
-	return []interface{}{}
-}
-
-func flattenLabelSelectorRequirement(in []metav1.LabelSelectorRequirement) []interface{} {
-	att := make([]interface{}, len(in), len(in))
-	for i, n := range in {
-		m := make(map[string]interface{})
-		m["key"] = n.Key
-		m["operator"] = n.Operator
-		m["values"] = newStringSet(schema.HashString, n.Values)
-		att[i] = m
-	}
-	return att
-}
 
 func flattenPersistentVolumeClaimSpec(in v1.PersistentVolumeClaimSpec) []interface{} {
 	att := make(map[string]interface{})
@@ -63,50 +39,40 @@ func flattenResourceRequirements(in v1.ResourceRequirements) []interface{} {
 
 // Expanders
 
-func expandLabelSelector(l []interface{}) *metav1.LabelSelector {
-	if len(l) == 0 || l[0] == nil {
-		return &metav1.LabelSelector{}
+func expandPersistenVolumeClaim(p map[string]interface{}) (*corev1.PersistentVolumeClaim, error) {
+	pvc := &corev1.PersistentVolumeClaim{}
+	if len(p) == 0 {
+		return pvc, nil
 	}
-	in := l[0].(map[string]interface{})
-	obj := &metav1.LabelSelector{}
-	if v, ok := in["match_labels"].(map[string]interface{}); ok && len(v) > 0 {
-		obj.MatchLabels = expandStringMap(v)
+	m, ok := p["metadata"].([]interface{})
+	if !ok {
+		return pvc, errors.New("persistent_volume_claim: failed to expand 'metadata'")
 	}
-	if v, ok := in["match_expressions"].([]interface{}); ok && len(v) > 0 {
-		obj.MatchExpressions = expandLabelSelectorRequirement(v)
+	pvc.ObjectMeta = expandMetadata(m)
+	s, ok := p["spec"].([]interface{})
+	if !ok {
+		return pvc, errors.New("persistent_volume_claim: failed to expand 'spec'")
 	}
-	return obj
+	spec, err := expandPersistentVolumeClaimSpec(s)
+	if err != nil {
+		return pvc, err
+	}
+	pvc.Spec = *spec
+	return pvc, nil
 }
 
-func expandLabelSelectorRequirement(l []interface{}) []metav1.LabelSelectorRequirement {
+func expandPersistentVolumeClaimSpec(l []interface{}) (*v1.PersistentVolumeClaimSpec, error) {
+	obj := &v1.PersistentVolumeClaimSpec{}
 	if len(l) == 0 || l[0] == nil {
-		return []metav1.LabelSelectorRequirement{}
-	}
-	obj := make([]metav1.LabelSelectorRequirement, len(l), len(l))
-	for i, n := range l {
-		in := n.(map[string]interface{})
-		obj[i] = metav1.LabelSelectorRequirement{
-			Key:      in["key"].(string),
-			Operator: metav1.LabelSelectorOperator(in["operator"].(string)),
-			Values:   sliceOfString(in["values"].(*schema.Set).List()),
-		}
-	}
-	return obj
-}
-
-func expandPersistentVolumeClaimSpec(l []interface{}) (v1.PersistentVolumeClaimSpec, error) {
-	if len(l) == 0 || l[0] == nil {
-		return v1.PersistentVolumeClaimSpec{}, nil
+		return obj, nil
 	}
 	in := l[0].(map[string]interface{})
 	resourceRequirements, err := expandResourceRequirements(in["resources"].([]interface{}))
 	if err != nil {
-		return v1.PersistentVolumeClaimSpec{}, err
+		return nil, err
 	}
-	obj := v1.PersistentVolumeClaimSpec{
-		AccessModes: expandPersistentVolumeAccessModes(in["access_modes"].(*schema.Set).List()),
-		Resources:   resourceRequirements,
-	}
+	obj.AccessModes = expandPersistentVolumeAccessModes(in["access_modes"].(*schema.Set).List())
+	obj.Resources = *resourceRequirements
 	if v, ok := in["selector"].([]interface{}); ok && len(v) > 0 {
 		obj.Selector = expandLabelSelector(v)
 	}
@@ -119,25 +85,25 @@ func expandPersistentVolumeClaimSpec(l []interface{}) (v1.PersistentVolumeClaimS
 	return obj, nil
 }
 
-func expandResourceRequirements(l []interface{}) (v1.ResourceRequirements, error) {
+func expandResourceRequirements(l []interface{}) (*v1.ResourceRequirements, error) {
+	obj := &v1.ResourceRequirements{}
 	if len(l) == 0 || l[0] == nil {
-		return v1.ResourceRequirements{}, nil
+		return obj, nil
 	}
 	in := l[0].(map[string]interface{})
-	obj := v1.ResourceRequirements{}
 	if v, ok := in["limits"].(map[string]interface{}); ok && len(v) > 0 {
-		var err error
-		obj.Limits, err = expandMapToResourceList(v)
+		rl, err := expandMapToResourceList(v)
 		if err != nil {
 			return obj, err
 		}
+		obj.Limits = *rl
 	}
 	if v, ok := in["requests"].(map[string]interface{}); ok && len(v) > 0 {
-		var err error
-		obj.Requests, err = expandMapToResourceList(v)
+		rq, err := expandMapToResourceList(v)
 		if err != nil {
 			return obj, err
 		}
+		obj.Requests = *rq
 	}
 	return obj, nil
 }

@@ -194,7 +194,7 @@ func volumeMountFields() map[string]*schema.Schema {
 	}
 }
 
-func containerFields(isUpdatable bool) map[string]*schema.Schema {
+func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schema {
 	s := map[string]*schema.Schema{
 		"args": {
 			Type:        schema.TypeList,
@@ -222,6 +222,7 @@ func containerFields(isUpdatable bool) map[string]*schema.Schema {
 					},
 					"value": {
 						Type:        schema.TypeString,
+						ForceNew:    true,
 						Optional:    true,
 						Description: `Variable references $(VAR_NAME) are expanded using the previous defined environment variables in the container and any service environment variables. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Defaults to "".`,
 					},
@@ -311,6 +312,61 @@ func containerFields(isUpdatable bool) map[string]*schema.Schema {
 											},
 										},
 									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"env_from": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			ForceNew:    true,
+			Description: "List of sources to populate environment variables in the container. The keys defined within a source must be a C_IDENTIFIER. All invalid keys will be reported as an event when the container is starting. When a key exists in multiple sources, the value associated with the last source will take precedence. Values defined by an Env with a duplicate key will take precedence. Cannot be updated.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"config_map_ref": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Description: "The ConfigMap to select from",
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"name": {
+									Type:        schema.TypeString,
+									Required:    true,
+									Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
+								},
+								"optional": {
+									Type:        schema.TypeBool,
+									Optional:    true,
+									Description: "Specify whether the ConfigMap must be defined",
+								},
+							},
+						},
+					},
+					"prefix": {
+						Type:        schema.TypeString,
+						Optional:    true,
+						Description: "An optional identifer to prepend to each key in the ConfigMap. Must be a C_IDENTIFIER.",
+					},
+					"secret_ref": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Description: "The Secret to select from",
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"name": {
+									Type:        schema.TypeString,
+									Required:    true,
+									Description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names",
+								},
+								"optional": {
+									Type:        schema.TypeBool,
+									Optional:    true,
+									Description: "Specify whether the Secret must be defined",
 								},
 							},
 						},
@@ -475,9 +531,9 @@ func containerFields(isUpdatable bool) map[string]*schema.Schema {
 	}
 
 	if !isUpdatable {
-		for k, _ := range s {
-			if k == "image" {
-				// This field is always updatable
+		for k := range s {
+			if k == "image" && !isInitContainer {
+				// this field is updatable for non-init containers
 				continue
 			}
 			s[k].ForceNew = true
@@ -531,36 +587,11 @@ func probeSchema() *schema.Resource {
 
 func securityContextSchema() *schema.Resource {
 	m := map[string]*schema.Schema{
-		"privileged": {
+		"allow_privilege_escalation": {
 			Type:        schema.TypeBool,
 			Optional:    true,
-			Default:     false,
-			Description: `Run container in privileged mode. Processes in privileged containers are essentially equivalent to root on the host.`,
-		},
-		"read_only_root_filesystem": {
-			Type:        schema.TypeBool,
-			Optional:    true,
-			Default:     false,
-			Description: "Whether this container has a read-only root filesystem.",
-		},
-		"run_as_non_root": {
-			Type:        schema.TypeBool,
-			Description: "Indicates that the container must run as a non-root user. If true, the Kubelet will validate the image at runtime to ensure that it does not run as UID 0 (root) and fail to start the container if it does.",
-			Optional:    true,
-		},
-		"run_as_user": {
-			Type:        schema.TypeInt,
-			Description: "The UID to run the entrypoint of the container process. Defaults to user specified in image metadata if unspecified",
-			Optional:    true,
-		},
-		"se_linux_options": {
-			Type:        schema.TypeList,
-			Description: "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: http://kubernetes.io/docs/user-guide/images#specifying-imagepullsecrets-on-a-pod",
-			Optional:    true,
-			MaxItems:    1,
-			Elem: &schema.Resource{
-				Schema: seLinuxOptionsField(),
-			},
+			Default:     true,
+			Description: `AllowPrivilegeEscalation controls whether a process can gain more privileges than its parent process. This bool directly controls if the no_new_privs flag will be set on the container process. AllowPrivilegeEscalation is true always when the container is: 1) run as Privileged 2) has CAP_SYS_ADMIN`,
 		},
 		"capabilities": {
 			Type:        schema.TypeList,
@@ -582,6 +613,37 @@ func securityContextSchema() *schema.Resource {
 						Description: "Removed capabilities",
 					},
 				},
+			},
+		},
+		"privileged": {
+			Type:        schema.TypeBool,
+			Optional:    true,
+			Default:     false,
+			Description: `Run container in privileged mode. Processes in privileged containers are essentially equivalent to root on the host. Defaults to false.`,
+		},
+		"read_only_root_filesystem": {
+			Type:        schema.TypeBool,
+			Optional:    true,
+			Default:     false,
+			Description: "Whether this container has a read-only root filesystem. Default is false.",
+		},
+		"run_as_non_root": {
+			Type:        schema.TypeBool,
+			Description: "Indicates that the container must run as a non-root user. If true, the Kubelet will validate the image at runtime to ensure that it does not run as UID 0 (root) and fail to start the container if it does. If unset or false, no such validation will be performed. May also be set in PodSecurityContext. If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.",
+			Optional:    true,
+		},
+		"run_as_user": {
+			Type:        schema.TypeInt,
+			Description: "The UID to run the entrypoint of the container process. Defaults to user specified in image metadata if unspecified. May also be set in PodSecurityContext. If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.",
+			Optional:    true,
+		},
+		"se_linux_options": {
+			Type:        schema.TypeList,
+			Description: "The SELinux context to be applied to the container. If unspecified, the container runtime will allocate a random SELinux context for each container. May also be set in PodSecurityContext. If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.",
+			Optional:    true,
+			MaxItems:    1,
+			Elem: &schema.Resource{
+				Schema: seLinuxOptionsField(),
 			},
 		},
 	}

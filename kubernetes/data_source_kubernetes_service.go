@@ -75,12 +75,18 @@ func dataSourceKubernetesService() *schema.Resource {
 										Computed:    true,
 									},
 									"target_port": {
-										Type:        schema.TypeInt,
+										Type:        schema.TypeString,
 										Description: "Number or name of the port to access on the pods targeted by the service. Number must be in the range 1 to 65535. This field is ignored for services with `cluster_ip = \"None\"`. More info: http://kubernetes.io/docs/user-guide/services#defining-a-service",
 										Computed:    true,
 									},
 								},
 							},
+						},
+						"publish_not_ready_addresses": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "When set to true, indicates that DNS implementations must publish the `notReadyAddresses` of subsets for the Endpoints associated with the Service. The default value is `false`. The primary use case for setting this field is to use a StatefulSet's Headless Service to propagate `SRV` records for its Pods without respect to their readiness for purpose of peer discovery.",
 						},
 						"selector": {
 							Type:        schema.TypeMap,

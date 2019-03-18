@@ -5,11 +5,11 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesLimitRange() *schema.Resource {
@@ -89,7 +89,7 @@ func resourceKubernetesLimitRangeCreate(d *schema.ResourceData, meta interface{}
 	}
 	limitRange := api.LimitRange{
 		ObjectMeta: metadata,
-		Spec:       spec,
+		Spec:       *spec,
 	}
 	log.Printf("[INFO] Creating new limit range: %#v", limitRange)
 	out, err := conn.CoreV1().LimitRanges(metadata.Namespace).Create(&limitRange)

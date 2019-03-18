@@ -7,9 +7,9 @@ import (
 	"github.com/hashicorp/terraform/helper/acctest"
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/terraform"
+	api "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func TestAccKubernetesResourceQuota_basic(t *testing.T) {
@@ -190,9 +190,10 @@ func TestAccKubernetesResourceQuota_importBasic(t *testing.T) {
 				Config: testAccKubernetesResourceQuotaConfig_basic(name),
 			},
 			{
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            resourceName,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"metadata.0.resource_version"},
 			},
 		},
 	})
@@ -249,24 +250,27 @@ func testAccCheckKubernetesResourceQuotaExists(n string, obj *api.ResourceQuota)
 func testAccKubernetesResourceQuotaConfig_basic(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_resource_quota" "test" {
-	metadata {
-		annotations {
-			TestAnnotationOne = "one"
-		}
-		labels {
-			TestLabelOne = "one"
-			TestLabelThree = "three"
-			TestLabelFour = "four"
-		}
-		name = "%s"
-	}
-	spec {
-		hard {
-			"limits.cpu" = 2
-			"limits.memory" = "2Gi"
-			pods = 4
-		}
-	}
+  metadata {
+    annotations {
+      TestAnnotationOne = "one"
+    }
+
+    labels {
+      TestLabelOne   = "one"
+      TestLabelThree = "three"
+      TestLabelFour  = "four"
+    }
+
+    name = "%s"
+  }
+
+  spec {
+    hard {
+      "limits.cpu"    = 2
+      "limits.memory" = "2Gi"
+      pods            = 4
+    }
+  }
 }
 `, name)
 }
@@ -274,25 +278,28 @@ resource "kubernetes_resource_quota" "test" {
 func testAccKubernetesResourceQuotaConfig_metaModified(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_resource_quota" "test" {
-	metadata {
-		annotations {
-			TestAnnotationOne = "one"
-			TestAnnotationTwo = "two"
-		}
-		labels {
-			TestLabelOne = "one"
-			TestLabelTwo = "two"
-			TestLabelThree = "three"
-		}
-		name = "%s"
-	}
-	spec {
-		hard {
-			"limits.cpu" = 2
-			"limits.memory" = "2Gi"
-			pods = 4
-		}
-	}
+  metadata {
+    annotations {
+      TestAnnotationOne = "one"
+      TestAnnotationTwo = "two"
+    }
+
+    labels {
+      TestLabelOne   = "one"
+      TestLabelTwo   = "two"
+      TestLabelThree = "three"
+    }
+
+    name = "%s"
+  }
+
+  spec {
+    hard {
+      "limits.cpu"    = 2
+      "limits.memory" = "2Gi"
+      pods            = 4
+    }
+  }
 }
 `, name)
 }
@@ -300,17 +307,18 @@ resource "kubernetes_resource_quota" "test" {
 func testAccKubernetesResourceQuotaConfig_specModified(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_resource_quota" "test" {
-	metadata {
-		name = "%s"
-	}
-	spec {
-		hard {
-			"limits.cpu" = 4
-			"requests.cpu" = 1
-			"limits.memory" = "4Gi"
-			pods = 10
-		}
-	}
+  metadata {
+    name = "%s"
+  }
+
+  spec {
+    hard {
+      "limits.cpu"    = 4
+      "requests.cpu"  = 1
+      "limits.memory" = "4Gi"
+      pods            = 10
+    }
+  }
 }
 `, name)
 }
@@ -318,14 +326,15 @@ resource "kubernetes_resource_quota" "test" {
 func testAccKubernetesResourceQuotaConfig_generatedName(prefix string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_resource_quota" "test" {
-	metadata {
-		generate_name = "%s"
-	}
-	spec {
-		hard {
-			pods = 10
-		}
-	}
+  metadata {
+    generate_name = "%s"
+  }
+
+  spec {
+    hard {
+      pods = 10
+    }
+  }
 }
 `, prefix)
 }
@@ -333,15 +342,17 @@ resource "kubernetes_resource_quota" "test" {
 func testAccKubernetesResourceQuotaConfig_withScopes(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_resource_quota" "test" {
-	metadata {
-		name = "%s"
-	}
-	spec {
-		hard {
-			pods = 10
-		}
-		scopes = ["BestEffort"]
-	}
+  metadata {
+    name = "%s"
+  }
+
+  spec {
+    hard {
+      pods = 10
+    }
+
+    scopes = ["BestEffort"]
+  }
 }
 `, name)
 }
@@ -349,15 +360,17 @@ resource "kubernetes_resource_quota" "test" {
 func testAccKubernetesResourceQuotaConfig_withScopesModified(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_resource_quota" "test" {
-	metadata {
-		name = "%s"
-	}
-	spec {
-		hard {
-			pods = 10
-		}
-		scopes = ["NotBestEffort"]
-	}
+  metadata {
+    name = "%s"
+  }
+
+  spec {
+    hard {
+      pods = 10
+    }
+
+    scopes = ["NotBestEffort"]
+  }
 }
 `, name)
 }

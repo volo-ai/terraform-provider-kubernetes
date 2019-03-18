@@ -26,7 +26,7 @@ data "kubernetes_storage_class" "example" {
 
 The following arguments are supported:
 
-* `metadata` - (Required) Standard storage class's metadata. More info: https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#metadata
+* `metadata` - (Required) Standard storage class's metadata. For more info see [Kubernetes reference](https://github.com/kubernetes/community/blob/e59e666e3464c7d4851136baa8835a311efdfb8e/contributors/devel/api-conventions.md#metadata)
 
 
 ## Nested Blocks
@@ -35,15 +35,15 @@ The following arguments are supported:
 
 #### Arguments
 
-* `name` - (Required) Name of the storage class, must be unique. More info: http://kubernetes.io/docs/user-guide/identifiers#names
+* `name` - (Required) Name of the storage class, must be unique. For more info see [Kubernetes reference](http://kubernetes.io/docs/user-guide/identifiers#names)
 
 #### Attributes
 
 
 * `generation` - A sequence number representing a specific generation of the desired state.
-* `resource_version` - An opaque value that represents the internal version of this storage class that can be used by clients to determine when storage class has changed. Read more: https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#concurrency-control-and-consistency
+* `resource_version` - An opaque value that represents the internal version of this storage class that can be used by clients to determine when storage class has changed. For more info see [Kubernetes reference](https://github.com/kubernetes/community/blob/e59e666e3464c7d4851136baa8835a311efdfb8e/contributors/devel/api-conventions.md#concurrency-control-and-consistency)
 * `self_link` - A URL representing this storage class.
-* `uid` - The unique in time and space value for this storage class. More info: http://kubernetes.io/docs/user-guide/identifiers#uids
+* `uid` - The unique in time and space value for this storage class. For more info see [Kubernetes reference](http://kubernetes.io/docs/user-guide/identifiers#uids)
 
 
 ## Argument Reference
@@ -53,3 +53,5 @@ The following attributes are exported:
 * `parameters` - The parameters for the provisioner that creates volume of this storage class.
 	Read more about [available parameters](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#parameters).
 * `storage_provisioner` - Indicates the type of the provisioner this storage class represents
+* `reclaim_policy` - Indicates the reclaim policy used.
+* `volume_binding_mode` - Indicates when volume binding and dynamic provisioning should occur.

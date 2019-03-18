@@ -7,11 +7,11 @@ import (
 
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesServiceAccount() *schema.Resource {
@@ -56,6 +56,12 @@ func resourceKubernetesServiceAccount() *schema.Resource {
 					},
 				},
 			},
+			"automount_service_account_token": {
+				Type:        schema.TypeBool,
+				Description: "True to enable automatic mounting of the service account token",
+				Optional:    true,
+				Default:     false,
+			},
 			"default_secret_name": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -69,7 +75,7 @@ func resourceKubernetesServiceAccountCreate(d *schema.ResourceData, meta interfa
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	svcAcc := api.ServiceAccount{
-		AutomountServiceAccountToken: ptrToBool(false),
+		AutomountServiceAccountToken: ptrToBool(d.Get("automount_service_account_token").(bool)),
 		ObjectMeta:                   metadata,
 		ImagePullSecrets:             expandLocalObjectReferenceArray(d.Get("image_pull_secret").(*schema.Set).List()),
 		Secrets:                      expandServiceAccountSecrets(d.Get("secret").(*schema.Set).List(), ""),
@@ -84,26 +90,45 @@ func resourceKubernetesServiceAccountCreate(d *schema.ResourceData, meta interfa
 
 	// Here we get the only chance to identify and store default secret name
 	// so we can avoid showing it in diff as it's not managed by Terraform
-	var resp *api.ServiceAccount
+	var svcAccTokens []api.Secret
 	err = resource.Retry(30*time.Second, func() *resource.RetryError {
-		var err error
-		resp, err = conn.CoreV1().ServiceAccounts(out.Namespace).Get(out.Name, metav1.GetOptions{})
+		resp, err := conn.CoreV1().ServiceAccounts(out.Namespace).Get(out.Name, metav1.GetOptions{})
 		if err != nil {
 			return resource.NonRetryableError(err)
 		}
-		if len(resp.Secrets) > len(svcAcc.Secrets) {
-			return nil
-		}
-		return resource.RetryableError(fmt.Errorf("Waiting for default secret of %q to appear", d.Id()))
-	})
 
-	diff := diffObjectReferences(svcAcc.Secrets, resp.Secrets)
-	if len(diff) > 1 {
-		return fmt.Errorf("Expected 1 generated default secret, %d found: %s", len(diff), diff)
+		if len(resp.Secrets) == len(svcAcc.Secrets) {
+			return resource.RetryableError(fmt.Errorf("Waiting for default secret of %q to appear", d.Id()))
+		}
+
+		diff := diffObjectReferences(svcAcc.Secrets, resp.Secrets)
+		secretList, err := conn.CoreV1().Secrets(out.Namespace).List(metav1.ListOptions{})
+		for _, secret := range secretList.Items {
+			for _, svcSecret := range diff {
+				if secret.Name != svcSecret.Name {
+					continue
+				}
+				if secret.Type == api.SecretTypeServiceAccountToken {
+					svcAccTokens = append(svcAccTokens, secret)
+				}
+			}
+		}
+
+		if len(svcAccTokens) == 0 {
+			return resource.RetryableError(fmt.Errorf("Expected 1 generated service account token, %d found", len(svcAccTokens)))
+		}
+
+		if len(svcAccTokens) > 1 {
+			return resource.NonRetryableError(fmt.Errorf("Expected 1 generated service account token, %d found: %s", len(svcAccTokens), err))
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	defaultSecret := diff[0]
-	d.Set("default_secret_name", defaultSecret.Name)
+	d.Set("default_secret_name", svcAccTokens[0].Name)
 
 	return resourceKubernetesServiceAccountRead(d, meta)
 }

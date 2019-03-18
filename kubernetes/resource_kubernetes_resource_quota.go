@@ -7,11 +7,11 @@ import (
 
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesResourceQuota() *schema.Resource {
@@ -66,7 +66,7 @@ func resourceKubernetesResourceQuotaCreate(d *schema.ResourceData, meta interfac
 	}
 	resQuota := api.ResourceQuota{
 		ObjectMeta: metadata,
-		Spec:       spec,
+		Spec:       *spec,
 	}
 	log.Printf("[INFO] Creating new resource quota: %#v", resQuota)
 	out, err := conn.CoreV1().ResourceQuotas(metadata.Namespace).Create(&resQuota)
@@ -140,17 +140,16 @@ func resourceKubernetesResourceQuotaUpdate(d *schema.ResourceData, meta interfac
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
-	var spec api.ResourceQuotaSpec
+	var spec *api.ResourceQuotaSpec
 	waitForChangedSpec := false
 	if d.HasChange("spec") {
-		var err error
 		spec, err = expandResourceQuotaSpec(d.Get("spec").([]interface{}))
 		if err != nil {
 			return err
 		}
 		ops = append(ops, &ReplaceOperation{
 			Path:  "/spec",
-			Value: spec,
+			Value: *spec,
 		})
 		waitForChangedSpec = true
 	}

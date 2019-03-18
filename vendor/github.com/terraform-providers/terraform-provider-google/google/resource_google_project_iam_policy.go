@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 
+	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/terraform/helper/schema"
 	"google.golang.org/api/cloudresourcemanager/v1"
 )
@@ -16,11 +17,15 @@ func resourceGoogleProjectIamPolicy() *schema.Resource {
 		Read:   resourceGoogleProjectIamPolicyRead,
 		Update: resourceGoogleProjectIamPolicyUpdate,
 		Delete: resourceGoogleProjectIamPolicyDelete,
+		Importer: &schema.ResourceImporter{
+			State: resourceGoogleProjectIamPolicyImport,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"project": &schema.Schema{
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
+				Computed: true,
 				ForceNew: true,
 			},
 			"policy_data": &schema.Schema{
@@ -29,20 +34,23 @@ func resourceGoogleProjectIamPolicy() *schema.Resource {
 				DiffSuppressFunc: jsonPolicyDiffSuppress,
 			},
 			"authoritative": &schema.Schema{
-				Type:     schema.TypeBool,
-				Optional: true,
+				Type:       schema.TypeBool,
+				Optional:   true,
+				Deprecated: "A future version of Terraform will remove the authoritative field. To ignore changes not managed by Terraform, use google_project_iam_binding and google_project_iam_member instead. See https://www.terraform.io/docs/providers/google/r/google_project_iam.html for more information.",
 			},
 			"etag": &schema.Schema{
 				Type:     schema.TypeString,
 				Computed: true,
 			},
 			"restore_policy": &schema.Schema{
-				Type:     schema.TypeString,
-				Computed: true,
+				Deprecated: "This field will be removed alongside the authoritative field. To ignore changes not managed by Terraform, use google_project_iam_binding and google_project_iam_member instead. See https://www.terraform.io/docs/providers/google/r/google_project_iam.html for more information.",
+				Type:       schema.TypeString,
+				Computed:   true,
 			},
 			"disable_project": &schema.Schema{
-				Type:     schema.TypeBool,
-				Optional: true,
+				Deprecated: "This will be removed with the authoritative field. Use lifecycle.prevent_destroy instead.",
+				Type:       schema.TypeBool,
+				Optional:   true,
 			},
 		},
 	}
@@ -50,7 +58,15 @@ func resourceGoogleProjectIamPolicy() *schema.Resource {
 
 func resourceGoogleProjectIamPolicyCreate(d *schema.ResourceData, meta interface{}) error {
 	config := meta.(*Config)
-	pid := d.Get("project").(string)
+	pid, err := getProject(d, config)
+	if err != nil {
+		return err
+	}
+
+	mutexKey := getProjectIamPolicyMutexKey(pid)
+	mutexKV.Lock(mutexKey)
+	defer mutexKV.Unlock(mutexKey)
+
 	// Get the policy in the template
 	p, err := getResourceIamPolicy(d)
 	if err != nil {
@@ -100,7 +116,10 @@ func resourceGoogleProjectIamPolicyCreate(d *schema.ResourceData, meta interface
 func resourceGoogleProjectIamPolicyRead(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG]: Reading google_project_iam_policy")
 	config := meta.(*Config)
-	pid := d.Get("project").(string)
+	pid, err := getProject(d, config)
+	if err != nil {
+		return err
+	}
 
 	p, err := getProjectIamPolicy(pid, config)
 	if err != nil {
@@ -128,13 +147,21 @@ func resourceGoogleProjectIamPolicyRead(d *schema.ResourceData, meta interface{}
 	log.Printf("[DEBUG]: Setting etag=%s", p.Etag)
 	d.Set("etag", p.Etag)
 	d.Set("policy_data", string(pBytes))
+	d.Set("project", pid)
 	return nil
 }
 
 func resourceGoogleProjectIamPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG]: Updating google_project_iam_policy")
 	config := meta.(*Config)
-	pid := d.Get("project").(string)
+	pid, err := getProject(d, config)
+	if err != nil {
+		return err
+	}
+
+	mutexKey := getProjectIamPolicyMutexKey(pid)
+	mutexKV.Lock(mutexKey)
+	defer mutexKV.Unlock(mutexKey)
 
 	// Get the policy in the template
 	p, err := getResourceIamPolicy(d)
@@ -198,7 +225,14 @@ func resourceGoogleProjectIamPolicyUpdate(d *schema.ResourceData, meta interface
 func resourceGoogleProjectIamPolicyDelete(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG]: Deleting google_project_iam_policy")
 	config := meta.(*Config)
-	pid := d.Get("project").(string)
+	pid, err := getProject(d, config)
+	if err != nil {
+		return err
+	}
+
+	mutexKey := getProjectIamPolicyMutexKey(pid)
+	mutexKV.Lock(mutexKey)
+	defer mutexKV.Unlock(mutexKey)
 
 	// Get the existing IAM policy from the API
 	ep, err := getProjectIamPolicy(pid, config)
@@ -231,6 +265,11 @@ func resourceGoogleProjectIamPolicyDelete(d *schema.ResourceData, meta interface
 	return nil
 }
 
+func resourceGoogleProjectIamPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	d.Set("project", d.Id())
+	return []*schema.ResourceData{d}, nil
+}
+
 // Subtract all bindings in policy b from policy a, and return the result
 func subtractIamPolicy(a, b *cloudresourcemanager.Policy) *cloudresourcemanager.Policy {
 	am := rolesToMembersMap(a.Bindings)
@@ -257,7 +296,7 @@ func setProjectIamPolicy(policy *cloudresourcemanager.Policy, config *Config, pi
 		&cloudresourcemanager.SetIamPolicyRequest{Policy: policy}).Do()
 
 	if err != nil {
-		return fmt.Errorf("Error applying IAM policy for project %q. Policy is %#v, error is %s", pid, policy, err)
+		return errwrap.Wrapf(fmt.Sprintf("Error applying IAM policy for project %q. Policy is %#v, error is {{err}}", pid, policy), err)
 	}
 	return nil
 }
@@ -326,43 +365,6 @@ func rolesToMembersBinding(m map[string]map[string]bool) []*cloudresourcemanager
 	return bindings
 }
 
-// Map a role to a map of members, allowing easy merging of multiple bindings.
-func rolesToMembersMap(bindings []*cloudresourcemanager.Binding) map[string]map[string]bool {
-	bm := make(map[string]map[string]bool)
-	// Get each binding
-	for _, b := range bindings {
-		// Initialize members map
-		if _, ok := bm[b.Role]; !ok {
-			bm[b.Role] = make(map[string]bool)
-		}
-		// Get each member (user/principal) for the binding
-		for _, m := range b.Members {
-			// Add the member
-			bm[b.Role][m] = true
-		}
-	}
-	return bm
-}
-
-// Merge multiple Bindings such that Bindings with the same Role result in
-// a single Binding with combined Members
-func mergeBindings(bindings []*cloudresourcemanager.Binding) []*cloudresourcemanager.Binding {
-	bm := rolesToMembersMap(bindings)
-	rb := make([]*cloudresourcemanager.Binding, 0)
-
-	for role, members := range bm {
-		var b cloudresourcemanager.Binding
-		b.Role = role
-		b.Members = make([]string, 0)
-		for m, _ := range members {
-			b.Members = append(b.Members, m)
-		}
-		rb = append(rb, &b)
-	}
-
-	return rb
-}
-
 func jsonPolicyDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
 	var oldPolicy, newPolicy cloudresourcemanager.Policy
 	if err := json.Unmarshal([]byte(old), &oldPolicy); err != nil {
@@ -416,4 +418,8 @@ func (b sortableBindings) Swap(i, j int) {
 }
 func (b sortableBindings) Less(i, j int) bool {
 	return b[i].Role < b[j].Role
+}
+
+func getProjectIamPolicyMutexKey(pid string) string {
+	return fmt.Sprintf("iam-project-%s", pid)
 }

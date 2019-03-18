@@ -4,12 +4,13 @@ import (
 	"log"
 
 	"fmt"
+
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesSecret() *schema.Resource {
@@ -48,7 +49,7 @@ func resourceKubernetesSecretCreate(d *schema.ResourceData, meta interface{}) er
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	secret := api.Secret{
 		ObjectMeta: metadata,
-		StringData: expandStringMap(d.Get("data").(map[string]interface{})),
+		Data:       expandStringMapToByteMap(d.Get("data").(map[string]interface{})),
 	}
 
 	if v, ok := d.GetOk("type"); ok {

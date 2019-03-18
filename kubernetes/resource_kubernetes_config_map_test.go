@@ -9,9 +9,9 @@ import (
 	"github.com/hashicorp/terraform/helper/acctest"
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/terraform"
+	api "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func TestAccKubernetesConfigMap_basic(t *testing.T) {
@@ -24,6 +24,27 @@ func TestAccKubernetesConfigMap_basic(t *testing.T) {
 		Providers:     testAccProviders,
 		CheckDestroy:  testAccCheckKubernetesConfigMapDestroy,
 		Steps: []resource.TestStep{
+			{
+				Config: testAccKubernetesConfigMapConfig_nodata(name),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckKubernetesConfigMapExists("kubernetes_config_map.test", &conf),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.annotations.%", "2"),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.annotations.TestAnnotationOne", "one"),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.annotations.TestAnnotationTwo", "two"),
+					testAccCheckMetaAnnotations(&conf.ObjectMeta, map[string]string{"TestAnnotationOne": "one", "TestAnnotationTwo": "two"}),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.labels.%", "3"),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.labels.TestLabelOne", "one"),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.labels.TestLabelTwo", "two"),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.labels.TestLabelThree", "three"),
+					testAccCheckMetaLabels(&conf.ObjectMeta, map[string]string{"TestLabelOne": "one", "TestLabelTwo": "two", "TestLabelThree": "three"}),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "metadata.0.name", name),
+					resource.TestCheckResourceAttrSet("kubernetes_config_map.test", "metadata.0.generation"),
+					resource.TestCheckResourceAttrSet("kubernetes_config_map.test", "metadata.0.resource_version"),
+					resource.TestCheckResourceAttrSet("kubernetes_config_map.test", "metadata.0.self_link"),
+					resource.TestCheckResourceAttrSet("kubernetes_config_map.test", "metadata.0.uid"),
+					resource.TestCheckResourceAttr("kubernetes_config_map.test", "data.%", "0"),
+				),
+			},
 			{
 				Config: testAccKubernetesConfigMapConfig_basic(name),
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -107,9 +128,10 @@ func TestAccKubernetesConfigMap_importBasic(t *testing.T) {
 			},
 
 			{
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            resourceName,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"metadata.0.resource_version"},
 			},
 		},
 	})
@@ -224,68 +246,102 @@ func testAccCheckKubernetesConfigMapExists(n string, obj *api.ConfigMap) resourc
 	}
 }
 
+func testAccKubernetesConfigMapConfig_nodata(name string) string {
+	return fmt.Sprintf(`
+resource "kubernetes_config_map" "test" {
+  metadata {
+    annotations {
+      TestAnnotationOne = "one"
+      TestAnnotationTwo = "two"
+    }
+
+    labels {
+      TestLabelOne   = "one"
+      TestLabelTwo   = "two"
+      TestLabelThree = "three"
+    }
+
+    name = "%s"
+  }
+
+  data {}
+}
+`, name)
+}
+
 func testAccKubernetesConfigMapConfig_basic(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_config_map" "test" {
-	metadata {
-		annotations {
-			TestAnnotationOne = "one"
-			TestAnnotationTwo = "two"
-		}
-		labels {
-			TestLabelOne = "one"
-			TestLabelTwo = "two"
-			TestLabelThree = "three"
-		}
-		name = "%s"
-	}
-	data {
-		one = "first"
-		two = "second"
-	}
-}`, name)
+  metadata {
+    annotations {
+      TestAnnotationOne = "one"
+      TestAnnotationTwo = "two"
+    }
+
+    labels {
+      TestLabelOne   = "one"
+      TestLabelTwo   = "two"
+      TestLabelThree = "three"
+    }
+
+    name = "%s"
+  }
+
+  data {
+    one = "first"
+    two = "second"
+  }
+}
+`, name)
 }
 
 func testAccKubernetesConfigMapConfig_modified(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_config_map" "test" {
-	metadata {
-		annotations {
-			TestAnnotationOne = "one"
-			Different = "1234"
-		}
-		labels {
-			TestLabelOne = "one"
-			TestLabelThree = "three"
-		}
-		name = "%s"
-	}
-	data {
-		one = "first"
-		two = "second"
-		nine = "ninth"
-	}
-}`, name)
+  metadata {
+    annotations {
+      TestAnnotationOne = "one"
+      Different         = "1234"
+    }
+
+    labels {
+      TestLabelOne   = "one"
+      TestLabelThree = "three"
+    }
+
+    name = "%s"
+  }
+
+  data {
+    one  = "first"
+    two  = "second"
+    nine = "ninth"
+  }
+}
+`, name)
 }
 
 func testAccKubernetesConfigMapConfig_noData(name string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_config_map" "test" {
-	metadata {
-		name = "%s"
-	}
-}`, name)
+  metadata {
+    name = "%s"
+  }
+}
+`, name)
 }
 
 func testAccKubernetesConfigMapConfig_generatedName(prefix string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_config_map" "test" {
-	metadata {
-		generate_name = "%s"
-	}
-	data {
-		one = "first"
-		two = "second"
-	}
-}`, prefix)
+  metadata {
+    generate_name = "%s"
+  }
+
+  data {
+    one = "first"
+    two = "second"
+  }
+}
+`, prefix)
 }

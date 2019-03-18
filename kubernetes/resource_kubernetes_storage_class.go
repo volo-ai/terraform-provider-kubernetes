@@ -5,11 +5,12 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform/helper/schema"
+	"k8s.io/api/core/v1"
+	api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/apis/storage/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesStorageClass() *schema.Resource {
@@ -37,6 +38,18 @@ func resourceKubernetesStorageClass() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 			},
+			"reclaim_policy": {
+				Type:        schema.TypeString,
+				Description: "Indicates the type of the reclaim policy",
+				Optional:    true,
+				Default:     "Delete",
+			},
+			"volume_binding_mode": {
+				Type:        schema.TypeString,
+				Description: "Indicates when volume binding and dynamic provisioning should occur",
+				Optional:    true,
+				Default:     "Immediate",
+			},
 		},
 	}
 }
@@ -45,9 +58,13 @@ func resourceKubernetesStorageClassCreate(d *schema.ResourceData, meta interface
 	conn := meta.(*kubernetes.Clientset)
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
+	reclaimPolicy := v1.PersistentVolumeReclaimPolicy(d.Get("reclaim_policy").(string))
+	volumeBindingMode := api.VolumeBindingMode(d.Get("volume_binding_mode").(string))
 	storageClass := api.StorageClass{
-		ObjectMeta:  metadata,
-		Provisioner: d.Get("storage_provisioner").(string),
+		ObjectMeta:        metadata,
+		Provisioner:       d.Get("storage_provisioner").(string),
+		ReclaimPolicy:     &reclaimPolicy,
+		VolumeBindingMode: &volumeBindingMode,
 	}
 
 	if v, ok := d.GetOk("parameters"); ok {
@@ -82,6 +99,8 @@ func resourceKubernetesStorageClassRead(d *schema.ResourceData, meta interface{}
 	}
 	d.Set("parameters", storageClass.Parameters)
 	d.Set("storage_provisioner", storageClass.Provisioner)
+	d.Set("reclaim_policy", storageClass.ReclaimPolicy)
+	d.Set("volume_binding_mode", storageClass.VolumeBindingMode)
 
 	return nil
 }
@@ -101,7 +120,7 @@ func resourceKubernetesStorageClassUpdate(d *schema.ResourceData, meta interface
 		return fmt.Errorf("Failed to update storage class: %s", err)
 	}
 	log.Printf("[INFO] Submitted updated storage class: %#v", out)
-	d.SetId(buildId(out.ObjectMeta))
+	d.SetId(out.ObjectMeta.Name)
 
 	return resourceKubernetesStorageClassRead(d, meta)
 }
@@ -116,7 +135,7 @@ func resourceKubernetesStorageClassDelete(d *schema.ResourceData, meta interface
 		return err
 	}
 
-	log.Printf("[INFO] Config map %s deleted", name)
+	log.Printf("[INFO] Storage class %s deleted", name)
 
 	d.SetId("")
 	return nil

@@ -5,11 +5,11 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/autoscaling/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/apis/autoscaling/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesHorizontalPodAutoscaler() *schema.Resource {
@@ -85,9 +85,14 @@ func resourceKubernetesHorizontalPodAutoscalerCreate(d *schema.ResourceData, met
 	conn := meta.(*kubernetes.Clientset)
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
+	spec, err := expandHorizontalPodAutoscalerSpec(d.Get("spec").([]interface{}))
+	if err != nil {
+		return err
+	}
+
 	svc := api.HorizontalPodAutoscaler{
 		ObjectMeta: metadata,
-		Spec:       expandHorizontalPodAutoscalerSpec(d.Get("spec").([]interface{})),
+		Spec:       *spec,
 	}
 	log.Printf("[INFO] Creating new horizontal pod autoscaler: %#v", svc)
 	out, err := conn.AutoscalingV1().HorizontalPodAutoscalers(metadata.Namespace).Create(&svc)

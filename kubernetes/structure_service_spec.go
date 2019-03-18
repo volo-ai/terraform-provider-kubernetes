@@ -1,16 +1,14 @@
 package kubernetes
 
 import (
+	gversion "github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform/helper/schema"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/apimachinery/pkg/version"
 )
 
 // Flatteners
-
-func flattenIntOrString(in intstr.IntOrString) int {
-	return in.IntValue()
-}
 
 func flattenServicePort(in []v1.ServicePort) []interface{} {
 	att := make([]interface{}, len(in), len(in))
@@ -19,7 +17,7 @@ func flattenServicePort(in []v1.ServicePort) []interface{} {
 		m["name"] = n.Name
 		m["protocol"] = string(n.Protocol)
 		m["port"] = int(n.Port)
-		m["target_port"] = flattenIntOrString(n.TargetPort)
+		m["target_port"] = n.TargetPort.String()
 		m["node_port"] = int(n.NodePort)
 
 		att[i] = m
@@ -56,6 +54,8 @@ func flattenServiceSpec(in v1.ServiceSpec) []interface{} {
 	if in.ExternalName != "" {
 		att["external_name"] = in.ExternalName
 	}
+	att["publish_not_ready_addresses"] = in.PublishNotReadyAddresses
+
 	return []interface{}{att}
 }
 
@@ -74,10 +74,6 @@ func flattenLoadBalancerIngress(in []v1.LoadBalancerIngress) []interface{} {
 
 // Expanders
 
-func expandIntOrString(in int) intstr.IntOrString {
-	return intstr.FromInt(in)
-}
-
 func expandServicePort(l []interface{}) []v1.ServicePort {
 	if len(l) == 0 || l[0] == nil {
 		return []v1.ServicePort{}
@@ -87,7 +83,7 @@ func expandServicePort(l []interface{}) []v1.ServicePort {
 		cfg := n.(map[string]interface{})
 		obj[i] = v1.ServicePort{
 			Port:       int32(cfg["port"].(int)),
-			TargetPort: expandIntOrString(cfg["target_port"].(int)),
+			TargetPort: intstr.Parse(cfg["target_port"].(string)),
 		}
 		if v, ok := cfg["name"].(string); ok {
 			obj[i].Name = v
@@ -136,12 +132,16 @@ func expandServiceSpec(l []interface{}) v1.ServiceSpec {
 	if v, ok := in["external_name"].(string); ok {
 		obj.ExternalName = v
 	}
+	if v, ok := in["publish_not_ready_addresses"].(bool); ok {
+		obj.PublishNotReadyAddresses = v
+	}
+
 	return obj
 }
 
 // Patch Ops
 
-func patchServiceSpec(keyPrefix, pathPrefix string, d *schema.ResourceData) PatchOperations {
+func patchServiceSpec(keyPrefix, pathPrefix string, d *schema.ResourceData, v *version.Info) (PatchOperations, error) {
 	ops := make([]PatchOperation, 0, 0)
 	if d.HasChange(keyPrefix + "selector") {
 		ops = append(ops, &ReplaceOperation{
@@ -180,11 +180,18 @@ func patchServiceSpec(keyPrefix, pathPrefix string, d *schema.ResourceData) Patc
 		})
 	}
 	if d.HasChange(keyPrefix + "external_ips") {
-		// If we haven't done this the deprecated field would have priority
-		ops = append(ops, &ReplaceOperation{
-			Path:  pathPrefix + "deprecatedPublicIPs",
-			Value: nil,
-		})
+		k8sVersion, err := gversion.NewVersion(v.String())
+		if err != nil {
+			return nil, err
+		}
+		v1_8_0, _ := gversion.NewVersion("1.8.0")
+		if k8sVersion.LessThan(v1_8_0) {
+			// If we haven't done this the deprecated field would have priority
+			ops = append(ops, &ReplaceOperation{
+				Path:  pathPrefix + "deprecatedPublicIPs",
+				Value: nil,
+			})
+		}
 
 		ops = append(ops, &ReplaceOperation{
 			Path:  pathPrefix + "externalIPs",
@@ -197,5 +204,19 @@ func patchServiceSpec(keyPrefix, pathPrefix string, d *schema.ResourceData) Patc
 			Value: d.Get(keyPrefix + "external_name").(string),
 		})
 	}
-	return ops
+	if d.HasChange(keyPrefix + "publish_not_ready_addresses") {
+		p := pathPrefix + "publishNotReadyAddresses"
+		v := d.Get(keyPrefix + "publish_not_ready_addresses").(bool)
+		if v {
+			ops = append(ops, &AddOperation{
+				Path:  p,
+				Value: v,
+			})
+		} else {
+			ops = append(ops, &RemoveOperation{
+				Path: p,
+			})
+		}
+	}
+	return ops, nil
 }

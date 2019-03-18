@@ -228,7 +228,19 @@ func NewUIDPreconditions(uid string) *Preconditions {
 }
 
 // HasObjectMetaSystemFieldValues returns true if fields that are managed by the system on ObjectMeta have values.
-func HasObjectMetaSystemFieldValues(meta *ObjectMeta) bool {
-	return !meta.CreationTimestamp.Time.IsZero() ||
-		len(meta.UID) != 0
+func HasObjectMetaSystemFieldValues(meta Object) bool {
+	return !meta.GetCreationTimestamp().Time.IsZero() ||
+		len(meta.GetUID()) != 0
+}
+
+// ResetObjectMetaForStatus forces the meta fields for a status update to match the meta fields
+// for a pre-existing object. This is opt-in for new objects with Status subresource.
+func ResetObjectMetaForStatus(meta, existingMeta Object) {
+	meta.SetDeletionTimestamp(existingMeta.GetDeletionTimestamp())
+	meta.SetGeneration(existingMeta.GetGeneration())
+	meta.SetSelfLink(existingMeta.GetSelfLink())
+	meta.SetLabels(existingMeta.GetLabels())
+	meta.SetAnnotations(existingMeta.GetAnnotations())
+	meta.SetFinalizers(existingMeta.GetFinalizers())
+	meta.SetOwnerReferences(existingMeta.GetOwnerReferences())
 }

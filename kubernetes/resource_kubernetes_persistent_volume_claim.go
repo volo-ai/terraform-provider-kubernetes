@@ -7,14 +7,23 @@ import (
 
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesPersistentVolumeClaim() *schema.Resource {
+	fields := persistentVolumeClaimFields()
+	// The 'wait_until_bound' control attribute only makes sense in stand-alone PVCs,
+	// so adding it on top of the standard PVC fields which are re-usable for other resources.
+	fields["wait_until_bound"] = &schema.Schema{
+		Type:        schema.TypeBool,
+		Description: "Whether to wait for the claim to reach `Bound` state (to find volume in which to claim the space)",
+		Optional:    true,
+		Default:     true,
+	}
 	return &schema.Resource{
 		Create: resourceKubernetesPersistentVolumeClaimCreate,
 		Read:   resourceKubernetesPersistentVolumeClaimRead,
@@ -32,137 +41,22 @@ func resourceKubernetesPersistentVolumeClaim() *schema.Resource {
 			Create: schema.DefaultTimeout(5 * time.Minute),
 		},
 
-		Schema: map[string]*schema.Schema{
-			"metadata": namespacedMetadataSchema("persistent volume claim", true),
-			"spec": {
-				Type:        schema.TypeList,
-				Description: "Spec defines the desired characteristics of a volume requested by a pod author. More info: http://kubernetes.io/docs/user-guide/persistent-volumes#persistentvolumeclaims",
-				Required:    true,
-				ForceNew:    true,
-				MaxItems:    1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"access_modes": {
-							Type:        schema.TypeSet,
-							Description: "A set of the desired access modes the volume should have. More info: http://kubernetes.io/docs/user-guide/persistent-volumes#access-modes-1",
-							Required:    true,
-							ForceNew:    true,
-							Elem:        &schema.Schema{Type: schema.TypeString},
-							Set:         schema.HashString,
-						},
-						"resources": {
-							Type:        schema.TypeList,
-							Description: "A list of the minimum resources the volume should have. More info: http://kubernetes.io/docs/user-guide/persistent-volumes#resources",
-							Required:    true,
-							ForceNew:    true,
-							MaxItems:    1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"limits": {
-										Type:        schema.TypeMap,
-										Description: "Map describing the maximum amount of compute resources allowed. More info: http://kubernetes.io/docs/user-guide/compute-resources/",
-										Optional:    true,
-										ForceNew:    true,
-									},
-									"requests": {
-										Type:        schema.TypeMap,
-										Description: "Map describing the minimum amount of compute resources required. If this is omitted for a container, it defaults to `limits` if that is explicitly specified, otherwise to an implementation-defined value. More info: http://kubernetes.io/docs/user-guide/compute-resources/",
-										Optional:    true,
-										ForceNew:    true,
-									},
-								},
-							},
-						},
-						"selector": {
-							Type:        schema.TypeList,
-							Description: "A label query over volumes to consider for binding.",
-							Optional:    true,
-							ForceNew:    true,
-							MaxItems:    1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"match_expressions": {
-										Type:        schema.TypeList,
-										Description: "A list of label selector requirements. The requirements are ANDed.",
-										Optional:    true,
-										ForceNew:    true,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"key": {
-													Type:        schema.TypeString,
-													Description: "The label key that the selector applies to.",
-													Optional:    true,
-													ForceNew:    true,
-												},
-												"operator": {
-													Type:        schema.TypeString,
-													Description: "A key's relationship to a set of values. Valid operators ard `In`, `NotIn`, `Exists` and `DoesNotExist`.",
-													Optional:    true,
-													ForceNew:    true,
-												},
-												"values": {
-													Type:        schema.TypeSet,
-													Description: "An array of string values. If the operator is `In` or `NotIn`, the values array must be non-empty. If the operator is `Exists` or `DoesNotExist`, the values array must be empty. This array is replaced during a strategic merge patch.",
-													Optional:    true,
-													ForceNew:    true,
-													Elem:        &schema.Schema{Type: schema.TypeString},
-													Set:         schema.HashString,
-												},
-											},
-										},
-									},
-									"match_labels": {
-										Type:        schema.TypeMap,
-										Description: "A map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of `match_expressions`, whose key field is \"key\", the operator is \"In\", and the values array contains only \"value\". The requirements are ANDed.",
-										Optional:    true,
-										ForceNew:    true,
-									},
-								},
-							},
-						},
-						"volume_name": {
-							Type:        schema.TypeString,
-							Description: "The binding reference to the PersistentVolume backing this claim.",
-							Optional:    true,
-							ForceNew:    true,
-							Computed:    true,
-						},
-						"storage_class_name": {
-							Type:        schema.TypeString,
-							Description: "Name of the storage class requested by the claim",
-							Optional:    true,
-							Computed:    true,
-							ForceNew:    true,
-						},
-					},
-				},
-			},
-			"wait_until_bound": {
-				Type:        schema.TypeBool,
-				Description: "Whether to wait for the claim to reach `Bound` state (to find volume in which to claim the space)",
-				Optional:    true,
-				Default:     true,
-			},
-		},
+		Schema: fields,
 	}
 }
 
 func resourceKubernetesPersistentVolumeClaimCreate(d *schema.ResourceData, meta interface{}) error {
 	conn := meta.(*kubernetes.Clientset)
 
-	metadata := expandMetadata(d.Get("metadata").([]interface{}))
-	spec, err := expandPersistentVolumeClaimSpec(d.Get("spec").([]interface{}))
+	claim, err := expandPersistenVolumeClaim(map[string]interface{}{
+		"metadata": d.Get("metadata"),
+		"spec":     d.Get("spec"),
+	})
 	if err != nil {
 		return err
 	}
-
-	claim := api.PersistentVolumeClaim{
-		ObjectMeta: metadata,
-		Spec:       spec,
-	}
-
 	log.Printf("[INFO] Creating new persistent volume claim: %#v", claim)
-	out, err := conn.CoreV1().PersistentVolumeClaims(metadata.Namespace).Create(&claim)
+	out, err := conn.CoreV1().PersistentVolumeClaims(claim.Namespace).Create(claim)
 	if err != nil {
 		return err
 	}
@@ -177,7 +71,7 @@ func resourceKubernetesPersistentVolumeClaimCreate(d *schema.ResourceData, meta 
 			Pending: []string{"Pending"},
 			Timeout: d.Timeout(schema.TimeoutCreate),
 			Refresh: func() (interface{}, string, error) {
-				out, err := conn.CoreV1().PersistentVolumeClaims(metadata.Namespace).Get(name, meta_v1.GetOptions{})
+				out, err := conn.CoreV1().PersistentVolumeClaims(claim.Namespace).Get(name, meta_v1.GetOptions{})
 				if err != nil {
 					log.Printf("[ERROR] Received error: %#v", err)
 					return out, "", err
@@ -190,10 +84,23 @@ func resourceKubernetesPersistentVolumeClaimCreate(d *schema.ResourceData, meta 
 		}
 		_, err = stateConf.WaitForState()
 		if err != nil {
-			lastWarnings, wErr := getLastWarningsForObject(conn, out.ObjectMeta, "PersistentVolumeClaim", 3)
+			var lastWarnings []api.Event
+			var wErr error
+
+			lastWarnings, wErr = getLastWarningsForObject(conn, out.ObjectMeta, "PersistentVolumeClaim", 3)
 			if wErr != nil {
 				return wErr
 			}
+
+			if len(lastWarnings) == 0 {
+				lastWarnings, wErr = getLastWarningsForObject(conn, meta_v1.ObjectMeta{
+					Name: out.Spec.VolumeName,
+				}, "PersistentVolume", 3)
+				if wErr != nil {
+					return wErr
+				}
+			}
+
 			return fmt.Errorf("%s%s", err, stringifyEvents(lastWarnings))
 		}
 	}

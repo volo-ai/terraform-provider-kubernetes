@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	api "k8s.io/kubernetes/pkg/api/v1"
 )
 
 func idParts(id string) (string, string, error) {
@@ -33,8 +33,13 @@ func expandMetadata(in []interface{}) metav1.ObjectMeta {
 	}
 	m := in[0].(map[string]interface{})
 
-	meta.Annotations = expandStringMap(m["annotations"].(map[string]interface{}))
-	meta.Labels = expandStringMap(m["labels"].(map[string]interface{}))
+	if v, ok := m["annotations"].(map[string]interface{}); ok && len(v) > 0 {
+		meta.Annotations = expandStringMap(m["annotations"].(map[string]interface{}))
+	}
+
+	if v, ok := m["labels"].(map[string]interface{}); ok && len(v) > 0 {
+		meta.Labels = expandStringMap(m["labels"].(map[string]interface{}))
+	}
 
 	if v, ok := m["generate_name"]; ok {
 		meta.GenerateName = v.(string)
@@ -72,10 +77,23 @@ func expandStringMap(m map[string]interface{}) map[string]string {
 	return result
 }
 
+func expandStringMapToByteMap(m map[string]interface{}) map[string][]byte {
+	result := make(map[string][]byte)
+	for k, v := range m {
+		result[k] = []byte(v.(string))
+	}
+	return result
+}
+
 func expandStringSlice(s []interface{}) []string {
 	result := make([]string, len(s), len(s))
 	for k, v := range s {
-		result[k] = v.(string)
+		// Handle the Terraform parser bug which turns empty strings in lists to nil.
+		if v == nil {
+			result[k] = ""
+		} else {
+			result[k] = v.(string)
+		}
 	}
 	return result
 }
@@ -101,7 +119,7 @@ func flattenMetadata(meta metav1.ObjectMeta) []map[string]interface{} {
 }
 
 func removeInternalKeys(m map[string]string) map[string]string {
-	for k, _ := range m {
+	for k := range m {
 		if isInternalKey(k) {
 			delete(m, k)
 		}
@@ -112,6 +130,11 @@ func removeInternalKeys(m map[string]string) map[string]string {
 func isInternalKey(annotationKey string) bool {
 	u, err := url.Parse("//" + annotationKey)
 	if err == nil && strings.HasSuffix(u.Hostname(), "kubernetes.io") {
+		return true
+	}
+
+	// Specific to DaemonSet annotations, generated & controlled by the server.
+	if strings.Contains(annotationKey, "deprecated.daemonset.template.generation") {
 		return true
 	}
 
@@ -171,8 +194,8 @@ func flattenResourceList(l api.ResourceList) map[string]string {
 	return m
 }
 
-func expandMapToResourceList(m map[string]interface{}) (api.ResourceList, error) {
-	out := make(map[api.ResourceName]resource.Quantity)
+func expandMapToResourceList(m map[string]interface{}) (*api.ResourceList, error) {
+	out := make(api.ResourceList)
 	for stringKey, origValue := range m {
 		key := api.ResourceName(stringKey)
 		var value resource.Quantity
@@ -184,15 +207,15 @@ func expandMapToResourceList(m map[string]interface{}) (api.ResourceList, error)
 			var err error
 			value, err = resource.ParseQuantity(v)
 			if err != nil {
-				return out, err
+				return &out, err
 			}
 		} else {
-			return out, fmt.Errorf("Unexpected value type: %#v", origValue)
+			return &out, fmt.Errorf("Unexpected value type: %#v", origValue)
 		}
 
 		out[key] = value
 	}
-	return out, nil
+	return &out, nil
 }
 
 func flattenPersistentVolumeAccessModes(in []api.PersistentVolumeAccessMode) *schema.Set {
@@ -222,8 +245,8 @@ func flattenResourceQuotaSpec(in api.ResourceQuotaSpec) []interface{} {
 	return out
 }
 
-func expandResourceQuotaSpec(s []interface{}) (api.ResourceQuotaSpec, error) {
-	out := api.ResourceQuotaSpec{}
+func expandResourceQuotaSpec(s []interface{}) (*api.ResourceQuotaSpec, error) {
+	out := &api.ResourceQuotaSpec{}
 	if len(s) < 1 {
 		return out, nil
 	}
@@ -234,7 +257,7 @@ func expandResourceQuotaSpec(s []interface{}) (api.ResourceQuotaSpec, error) {
 		if err != nil {
 			return out, err
 		}
-		out.Hard = list
+		out.Hard = *list
 	}
 
 	if v, ok := m["scopes"]; ok {
@@ -297,8 +320,8 @@ func resourceListEquals(x, y api.ResourceList) bool {
 	return true
 }
 
-func expandLimitRangeSpec(s []interface{}, isNew bool) (api.LimitRangeSpec, error) {
-	out := api.LimitRangeSpec{}
+func expandLimitRangeSpec(s []interface{}, isNew bool) (*api.LimitRangeSpec, error) {
+	out := &api.LimitRangeSpec{}
 	if len(s) < 1 || s[0] == nil {
 		return out, nil
 	}
@@ -328,7 +351,7 @@ func expandLimitRangeSpec(s []interface{}, isNew bool) (api.LimitRangeSpec, erro
 					if err != nil {
 						return out, err
 					}
-					lrItem.DefaultRequest = el
+					lrItem.DefaultRequest = *el
 				}
 			}
 
@@ -337,28 +360,28 @@ func expandLimitRangeSpec(s []interface{}, isNew bool) (api.LimitRangeSpec, erro
 				if err != nil {
 					return out, err
 				}
-				lrItem.Default = el
+				lrItem.Default = *el
 			}
 			if v, ok := limit["max"]; ok {
 				el, err := expandMapToResourceList(v.(map[string]interface{}))
 				if err != nil {
 					return out, err
 				}
-				lrItem.Max = el
+				lrItem.Max = *el
 			}
 			if v, ok := limit["max_limit_request_ratio"]; ok {
 				el, err := expandMapToResourceList(v.(map[string]interface{}))
 				if err != nil {
 					return out, err
 				}
-				lrItem.MaxLimitRequestRatio = el
+				lrItem.MaxLimitRequestRatio = *el
 			}
 			if v, ok := limit["min"]; ok {
 				el, err := expandMapToResourceList(v.(map[string]interface{}))
 				if err != nil {
 					return out, err
 				}
-				lrItem.Min = el
+				lrItem.Min = *el
 			}
 
 			newLimits[i] = lrItem
@@ -371,6 +394,10 @@ func expandLimitRangeSpec(s []interface{}, isNew bool) (api.LimitRangeSpec, erro
 }
 
 func flattenLimitRangeSpec(in api.LimitRangeSpec) []interface{} {
+	if len(in.Limits) == 0 {
+		return []interface{}{}
+	}
+
 	out := make([]interface{}, 1)
 	limits := make([]interface{}, len(in.Limits), len(in.Limits))
 
@@ -476,4 +503,57 @@ func expandServiceAccountSecrets(in []interface{}, defaultSecretName string) []a
 	}
 
 	return att
+}
+
+func flattenNodeSelectorRequirementList(in []api.NodeSelectorRequirement) []map[string]interface{} {
+	att := make([]map[string]interface{}, len(in))
+	for i, v := range in {
+		m := map[string]interface{}{}
+		m["key"] = v.Key
+		m["values"] = newStringSet(schema.HashString, v.Values)
+		m["operator"] = string(v.Operator)
+		att[i] = m
+	}
+	return att
+}
+
+func expandNodeSelectorRequirementList(in []interface{}) []api.NodeSelectorRequirement {
+	att := []api.NodeSelectorRequirement{}
+	if len(in) < 1 {
+		return att
+	}
+	att = make([]api.NodeSelectorRequirement, len(in))
+	for i, c := range in {
+		p := c.(map[string]interface{})
+		att[i].Key = p["key"].(string)
+		att[i].Operator = api.NodeSelectorOperator(p["operator"].(string))
+		att[i].Values = expandStringSlice(p["values"].(*schema.Set).List())
+	}
+	return att
+}
+
+func flattenNodeSelectorTerm(in api.NodeSelectorTerm) []interface{} {
+	att := make(map[string]interface{})
+	if len(in.MatchExpressions) > 0 {
+		att["match_expressions"] = flattenNodeSelectorRequirementList(in.MatchExpressions)
+	}
+	if len(in.MatchFields) > 0 {
+		att["match_fields"] = flattenNodeSelectorRequirementList(in.MatchFields)
+	}
+	return []interface{}{att}
+}
+
+func expandNodeSelectorTerm(l []interface{}) api.NodeSelectorTerm {
+	if len(l) == 0 || l[0] == nil {
+		return api.NodeSelectorTerm{}
+	}
+	in := l[0].(map[string]interface{})
+	obj := api.NodeSelectorTerm{}
+	if v, ok := in["match_expressions"].([]interface{}); ok && len(v) > 0 {
+		obj.MatchExpressions = expandNodeSelectorRequirementList(v)
+	}
+	if v, ok := in["match_fields"].([]interface{}); ok && len(v) > 0 {
+		obj.MatchFields = expandNodeSelectorRequirementList(v)
+	}
+	return obj
 }

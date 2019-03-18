@@ -30,11 +30,13 @@ resource "kubernetes_namespace" "example" {
 ## Kubernetes versions
 
 Both backward and forward compatibility with Kubernetes API is mostly defined
-by the [official K8S Go library](https://github.com/kubernetes/kubernetes) which we ship with Terraform.
+by the [official K8S Go library](https://github.com/kubernetes/kubernetes) (prior to `1.1` release)
+and [client Go library](https://github.com/kubernetes/client-go) which we ship with Terraform.
 Below are versions of the library bundled with given versions of Terraform.
 
-* Terraform `<= 0.9.6` - Kubernetes `1.5.4`
-* Terraform `0.9.7+` - Kubernetes `1.6.1`
+* Terraform `<= 0.9.6` (prior to provider split) - Kubernetes `1.5.4`
+* Terraform `0.9.7` (prior to provider split) `< 1.1` (provider version) - Kubernetes `1.6.1`
+* `1.1+` - Kubernetes `1.7`
 
 ## Authentication
 
@@ -63,19 +65,29 @@ Read [more about `kubectl` in the official docs](https://kubernetes.io/docs/user
 
 ### Statically defined credentials
 
-The other way is **statically** define all the credentials:
+The other way is **statically** define TLS certificate credentials:
 
 ```hcl
 provider "kubernetes" {
-  host     = "https://104.196.242.174"
-  username = "ClusterMaster"
-  password = "MindTheGap"
+  host = "https://104.196.242.174"
 
   client_certificate     = "${file("~/.kube/client-cert.pem")}"
   client_key             = "${file("~/.kube/client-key.pem")}"
   cluster_ca_certificate = "${file("~/.kube/cluster-ca-cert.pem")}"
 }
 ```
+
+or username and password (HTTP Basic Authorization):
+
+```hcl
+provider "kubernetes" {
+  host = "https://104.196.242.174"
+
+  username = "username"
+  password = "password"
+}
+```
+
 
 If you have **both** valid configuration in a config file and static configuration, the static one is used as override.
 i.e. any static field will override its counterpart loaded from the config.

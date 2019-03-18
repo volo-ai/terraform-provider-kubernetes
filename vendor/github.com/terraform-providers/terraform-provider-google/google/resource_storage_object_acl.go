@@ -11,10 +11,11 @@ import (
 
 func resourceStorageObjectAcl() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceStorageObjectAclCreate,
-		Read:   resourceStorageObjectAclRead,
-		Update: resourceStorageObjectAclUpdate,
-		Delete: resourceStorageObjectAclDelete,
+		Create:        resourceStorageObjectAclCreate,
+		Read:          resourceStorageObjectAclRead,
+		Update:        resourceStorageObjectAclUpdate,
+		Delete:        resourceStorageObjectAclDelete,
+		CustomizeDiff: resourceStorageRoleEntityCustomizeDiff,
 
 		Schema: map[string]*schema.Schema{
 			"bucket": &schema.Schema{
@@ -38,6 +39,7 @@ func resourceStorageObjectAcl() *schema.Resource {
 			"role_entity": &schema.Schema{
 				Type:     schema.TypeList,
 				Optional: true,
+				Computed: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
 		},
@@ -84,7 +86,7 @@ func resourceStorageObjectAclCreate(d *schema.ResourceData, meta interface{}) er
 			return fmt.Errorf("Error updating object %s: %v", bucket, err)
 		}
 
-		return resourceStorageBucketAclRead(d, meta)
+		return resourceStorageObjectAclRead(d, meta)
 	} else if len(role_entity) > 0 {
 		for _, v := range role_entity {
 			pair, err := getRoleEntityPair(v.(string))
@@ -150,6 +152,8 @@ func resourceStorageObjectAclRead(d *schema.ResourceData, meta interface{}) erro
 		}
 
 		d.Set("role_entity", role_entity)
+	} else {
+		d.Set("role_entity", nil)
 	}
 
 	d.SetId(getObjectAclId(object))

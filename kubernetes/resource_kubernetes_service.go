@@ -7,11 +7,11 @@ import (
 
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
+	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
-	api "k8s.io/kubernetes/pkg/api/v1"
-	kubernetes "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 func resourceKubernetesService() *schema.Resource {
@@ -95,13 +95,19 @@ func resourceKubernetesService() *schema.Resource {
 										Default:     "TCP",
 									},
 									"target_port": {
-										Type:        schema.TypeInt,
+										Type:        schema.TypeString,
 										Description: "Number or name of the port to access on the pods targeted by the service. Number must be in the range 1 to 65535. This field is ignored for services with `cluster_ip = \"None\"`. More info: http://kubernetes.io/docs/user-guide/services#defining-a-service",
 										Optional:    true,
 										Computed:    true,
 									},
 								},
 							},
+						},
+						"publish_not_ready_addresses": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "When set to true, indicates that DNS implementations must publish the `notReadyAddresses` of subsets for the Endpoints associated with the Service. The default value is `false`. The primary use case for setting this field is to use a StatefulSet's Headless Service to propagate `SRV` records for its Pods without respect to their readiness for purpose of peer discovery.",
 						},
 						"selector": {
 							Type:        schema.TypeMap,
@@ -236,7 +242,14 @@ func resourceKubernetesServiceUpdate(d *schema.ResourceData, meta interface{}) e
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
 	if d.HasChange("spec") {
-		diffOps := patchServiceSpec("spec.0.", "/spec/", d)
+		serverVersion, err := conn.ServerVersion()
+		if err != nil {
+			return err
+		}
+		diffOps, err := patchServiceSpec("spec.0.", "/spec/", d, serverVersion)
+		if err != nil {
+			return err
+		}
 		ops = append(ops, diffOps...)
 	}
 	data, err := ops.MarshalJSON()

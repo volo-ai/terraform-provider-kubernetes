@@ -4,7 +4,7 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/terraform/helper/schema"
-	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/api/core/v1"
 )
 
 // Flatteners
@@ -14,11 +14,18 @@ func flattenPodSpec(in v1.PodSpec) ([]interface{}, error) {
 	if in.ActiveDeadlineSeconds != nil {
 		att["active_deadline_seconds"] = *in.ActiveDeadlineSeconds
 	}
+
 	containers, err := flattenContainers(in.Containers)
 	if err != nil {
 		return nil, err
 	}
 	att["container"] = containers
+
+	initContainers, err := flattenContainers(in.InitContainers)
+	if err != nil {
+		return nil, err
+	}
+	att["init_container"] = initContainers
 
 	att["dns_policy"] = in.DNSPolicy
 
@@ -67,18 +74,16 @@ func flattenPodSpec(in v1.PodSpec) ([]interface{}, error) {
 
 func flattenPodSecurityContext(in *v1.PodSecurityContext) []interface{} {
 	att := make(map[string]interface{})
+
 	if in.FSGroup != nil {
 		att["fs_group"] = *in.FSGroup
 	}
-
 	if in.RunAsNonRoot != nil {
 		att["run_as_non_root"] = *in.RunAsNonRoot
 	}
-
 	if in.RunAsUser != nil {
 		att["run_as_user"] = *in.RunAsUser
 	}
-
 	if len(in.SupplementalGroups) > 0 {
 		att["supplemental_groups"] = newInt64Set(schema.HashSchema(&schema.Schema{
 			Type: schema.TypeInt,
@@ -261,7 +266,9 @@ func flattenConfigMapVolumeSource(in *v1.ConfigMapVolumeSource) []interface{} {
 		for i, v := range in.Items {
 			m := map[string]interface{}{}
 			m["key"] = v.Key
-			m["mode"] = v.Mode
+			if v.Mode != nil {
+				m["mode"] = *v.Mode
+			}
 			m["path"] = v.Path
 			items[i] = m
 		}
@@ -306,8 +313,8 @@ func flattenSecretVolumeSource(in *v1.SecretVolumeSource) []interface{} {
 
 // Expanders
 
-func expandPodSpec(p []interface{}) (v1.PodSpec, error) {
-	obj := v1.PodSpec{}
+func expandPodSpec(p []interface{}) (*v1.PodSpec, error) {
+	obj := &v1.PodSpec{}
 	if len(p) == 0 || p[0] == nil {
 		return obj, nil
 	}
@@ -323,6 +330,14 @@ func expandPodSpec(p []interface{}) (v1.PodSpec, error) {
 			return obj, err
 		}
 		obj.Containers = cs
+	}
+
+	if v, ok := in["init_container"].([]interface{}); ok && len(v) > 0 {
+		cs, err := expandContainers(v)
+		if err != nil {
+			return obj, err
+		}
+		obj.InitContainers = cs
 	}
 
 	if v, ok := in["dns_policy"].(string); ok {
@@ -409,12 +424,11 @@ func expandPodSecurityContext(l []interface{}) *v1.PodSecurityContext {
 	if v, ok := in["run_as_user"].(int); ok {
 		obj.RunAsUser = ptrToInt64(int64(v))
 	}
-	if v, ok := in["supplemental_groups"].(*schema.Set); ok {
-		obj.SupplementalGroups = schemaSetToInt64Array(v)
-	}
-
 	if v, ok := in["se_linux_options"].([]interface{}); ok && len(v) > 0 {
 		obj.SELinuxOptions = expandSeLinuxOptions(v)
+	}
+	if v, ok := in["supplemental_groups"].(*schema.Set); ok {
+		obj.SupplementalGroups = schemaSetToInt64Array(v)
 	}
 
 	return obj
@@ -686,7 +700,6 @@ func patchPodSpec(pathPrefix, prefix string, d *schema.ResourceData) (PatchOpera
 	ops := make([]PatchOperation, 0)
 
 	if d.HasChange(prefix + "active_deadline_seconds") {
-
 		v := d.Get(prefix + "active_deadline_seconds").(int)
 		ops = append(ops, &ReplaceOperation{
 			Path:  pathPrefix + "/activeDeadlineSeconds",
