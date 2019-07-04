@@ -4,20 +4,23 @@ This provider is a fork of the official Kubernetes provider developed by HashiCo
 
 **Status**
 
-Maintenance of this fork will be winding down now that the official Terraform provider is being supported by a full time HashiCorp engineer :tada: :tada: :tada:
+This fork is no longer supported or maintained.
 
-In the meantime, this fork supports the following Kubernetes Resources currently not supported in the official provider:
+The official Terraform provider is being supported by a full time HashiCorp engineer and all resources this fork provided are available in the official build :tada: :tada: :tada:
 
 - ~Cluster Role~ **Added to official provider v1.5.1**
 - ~Cluster Role Binding~ **Added to official provider v1.3.0**
-- Cron Job `kubernetes_cron_job`
+- ~Cron Job~ **Added to official provider v1.8.0**
 - ~Daemonset~ **Added to official provider v1.5.1**
 - ~Deployment~ **Added to official provider v1.3.0**
-- Ingress `kubernetes_ingress`
-- Job `kubernetes_job`
+- ~Ingress~ **Added to official provider v1.7.0**
+- ~Job~ **Added to official provider v1.8.0**
 - ~Role~ **Added to official provider v1.5.0**
 - ~Role Binding~ **Added to official provider v1.5.0**
 - ~Stateful Set~ **Added to official provider v1.4.0**
+
+---
+
 
 ## Supported Kubernetes Versions
 
